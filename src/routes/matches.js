@@ -30,7 +30,6 @@ matchesRouter.get("/", async (req, res) => {
 
 matchesRouter.post("/", async (req, res) => {
     const parsed = createMatchSchema.safeParse(req.body);
-    const { data: { startTime, endTime, homeScore, awayScore } } = parsed;
 
     if (!parsed.success) {
         return res.status(400).json({
@@ -38,6 +37,8 @@ matchesRouter.post("/", async (req, res) => {
             details: JSON.stringify(parsed.error)
         });
     }
+
+    const { data: { startTime, endTime, homeScore, awayScore } } = parsed;
 
     try {
         const [event] = await db.insert(matches).values({
@@ -48,6 +49,11 @@ matchesRouter.post("/", async (req, res) => {
             awayScore: Number(awayScore) ?? 0,
             status: getMatchStatus(startTime, endTime)
         }).returning();
+
+        // if match is created immediately push the data to all connected fans
+        if (res.app.locals.broadcastMatchCreated) {
+            res.app.locals.broadcastMatchCreated(event);
+        }
 
         res.status(201).json(event);
     } catch (error) {
